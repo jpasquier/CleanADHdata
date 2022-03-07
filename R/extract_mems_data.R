@@ -45,6 +45,33 @@ bool2index <- function(b) {
   return(r)
 }
 
+# Extract dates and times from a string  
+str2dateHour <- function(x) {
+  if (!any(class(x) == "character")) {
+    stop("A string must be provided as input")
+  }
+  fmts <- c("%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y")
+  ptns <- c("^[0-9]{4}(-[0-9]{2}){2}$", "^([0-9]{2}/){2}[0-9]{4}$",
+            "^([0-9]{2}\\.){2}[0-9]{4}$")
+  fmts <- c(fmts, paste(fmts, "%H:%M"))
+  ptns <- c(ptns, sub("\\$$", " [0-9]{2}:[0-9]{2}(:[0-9]{2})$", ptns))
+  b <- sapply(ptns, function(ptn) all(is.na(x) | grepl(ptn, x)))
+  b <- b & sapply(fmts, function(fmt) {
+    r <- as.POSIXct(x, format = fmt)
+    all(is.na(x) == is.na(r))
+  })
+  fmts[b]
+  if (sum(b) != 1) {
+    stop(paste("The dates contained in this character string vector are",
+               "not recognized."))
+  }
+  r <- as.POSIXct(x, format = fmts[b])
+  d <- as.Date(format(r, "%Y-%m-%d"))
+  h <- format(r, "%H:%M")
+  if (all(h[!is.na(h)] == "00:00")) h[!is.na(h)] <- "03:00"
+  list(date = d, hour = h)
+}
+
 # ----------------------- Import auxiliary data file ------------------------ #
 
 # Select the auxiliary data file. The `eventslist` files must be in the same
@@ -229,7 +256,7 @@ fileList <- lapply(c("events?list", "dailyadherence"), function(p) {
 OpeningTables <- lapply(c(events = 1, dailyAdh = 2), function(k) {
   do.call(rbind, lapply(fileList[[k]], function(f) {
     r <- as.data.frame(read_excel(file.path(workingDirectory, f),
-                                 na = c("", "NA")))
+                                  na = c("", "NA")))
     # Check that the files is not empty
     if (nrow(r) == 0) {
       cat(file = wrnLog, append = TRUE, paste("File", f, "is empty\n"))
@@ -273,58 +300,23 @@ OpeningTables <- lapply(c(events = 1, dailyAdh = 2), function(k) {
     # Check that the variable `Date` is a date or a datetime
     if (any(!is.na(r$Date))) {
       error <- FALSE
-      if (!any(class(r$Date) %in% c("Date", "POSIXct"))) {
-        # if not a date but a string, try to convert to a date
-        if (any(class(r$Date) == "character")) {
-          p <- c("^[0-9]{4}(-[0-9]{2}){2}$", "^([0-9]{2}(\\.|/)){2}[0-9]{4}$")
-          isDate <- all(grepl(p[1], r$Date)) | all(grepl(p[2], r$Date))
-          p <- sub("\\$$", " [0-9]{2}:[0-9]{2}$", p)
-          isDatetime1 <- all(grepl(p[1], r$Date)) | all(grepl(p[2], r$Date))
-          p <- sub("\\$$", ":[0-9]{2}$", p)
-          isDatetime2 <- all(grepl(p[1], r$Date)) | all(grepl(p[2], r$Date))
-          dfmt = c("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y")
-          if (isDate) {
-            d <- tryCatch(as.Date(r$Date, tryFormats = dfmt),
-                          error = function(e) {e})
-          } else if (isDatetime1 | isDatetime2) {
-            if (isDatetime1) {
-              dfmt = paste(dfmt, "%H:%M")
-            } else {
-              dfmt = paste(dfmt, "%H:%M:%S")
-            }
-            d <- tryCatch(as.POSIXct(r$Date, tryFormats = dfmt),
-                          error = function(e) {e})
-          } else {
-            error <- TRUE
-          }
-          if (any(grepl("error", class(d)))) {
-            error <- TRUE
-          }
-        # if neither a date nor a string, return an error
-        } else {
-          error <- TRUE
-        }
-        if (error) {
-          cat(file = errLog, append = TRUE, paste(
-            "The date variable in the file", f, "is incorrectly formatted.",
-            "The following formats are accepted: yyyy-mm-dd; dd.mm.yyyy;",
-            "dd/mm/yyyy; yyyy-mm-dd HH:MM(:SS); dd.mm.yyyy HH:MM(:SS);",
-            "dd/mm/yyyy HH:MM(:SS)\n"
-          ))
-          d <- as.Date(NA)
-        }
-        r$Date <- d
+      if (any(class(r$Date) %in% c("Date", "POSIXct"))) {
+        r$Date <- as.character(r$Date)
       }
-    }
-    # Eventlist: convert date to datetime. Attention, do not use 00:00:00 as
-    # time, otherwise the opening will then be attributed to the previous day.
-    # Add 21600 seconds (6 hours).
-    if (k == 1 & any(class(r$Date) == "Date")) {
-      r$Date <- as.POSIXct(r$Date) + 21600
-    }
-    # Daily adherence: convert datetime to date
-    if (k == 2 & any(class(r$Date) == "POSIXct")) {
-      r$Date <- as.Date(r$Date)
+      z <- tryCatch(str2dateHour(r$Date), error = function(e) e)
+      if (any(grepl("error", class(z)))) {
+        cat(file = errLog, append = TRUE, paste(
+          "The date variable in the file", f, "is incorrectly formatted.",
+          "The following formats are accepted: yyyy-mm-dd; dd.mm.yyyy;",
+          "dd/mm/yyyy; yyyy-mm-dd HH:MM(:SS); dd.mm.yyyy HH:MM(:SS);",
+          "dd/mm/yyyy HH:MM(:SS)\n"
+        ))
+        r$Date <- as.Date(NA)
+        if (k == 1) r$Hour <- as.character(NA)
+      } else {
+        r$Date <- z$date
+        if (k == 1) r$Hour <- z$hour
+      }
     }
     # Daily adherence: check that the values of the variable `RecordedOpenings`
     # are non-negative integers
@@ -369,13 +361,6 @@ OpeningTables <- lapply(c(events = 1, dailyAdh = 2), function(k) {
 # ---------- Eventlist: Number of openings by patient/monitor/date ---------- #
 
 events <- OpeningTables$events
-
-# Rename `Date` as `POSIXct_time`
-names(events)[names(events) == "Date"] <- "POSIX_time"
-
-# Extract date and hour of opening from POSIX time
-events$Date <- as.Date(format(events$POSIX_time, "%Y-%m-%d"))
-events$Hour <- format(events$POSIX_time, "%H:%M")
 
 # Attribution of the opening to the previous day if it takes place between
 # 00:00 and 02:59
