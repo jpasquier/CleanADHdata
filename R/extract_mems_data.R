@@ -793,6 +793,11 @@ if (any(ls() == "PatientCovariables")) {
 
 }
 
+# ----------------------------- Sort dataframes ----------------------------- #
+
+mems <- mems[order(mems$PatientCode, mems$Monitor, mems$Date), ]
+pmems <- pmems[order(pmems$PatientCode, pmems$Date), ]
+
 # --------------------------------- Summary --------------------------------- #
 
 # Summary by monitor and by patient
