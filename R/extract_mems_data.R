@@ -160,12 +160,10 @@ requestedVariables <- list(
   AddedOpenings = c(idvar, "Date", "AddedOpenings"),
   AdverseEvents = c("PatientCode", "Date", "AdverseEvent",
                     "AdverseEventGrade"),
-  #EMCovariables = c(idvar, "StartDate", "EndDate"),
-  EMCovariables = idvar,
+  EMCovariables = c(idvar, "StartDate", "EndDate"),
   EMInfo = c(idvar, "StartDate", "EndDate"),
   NonMonitoredPeriods = c(idvar, "StartDate", "EndDate"),
-  #PatientCovariables = c("PatientCode", "StartDate", "EndDate"),
-  PatientCovariables = "PatientCode",
+  PatientCovariables = c("PatientCode", "StartDate", "EndDate"),
   Regimen = c(idvar, "StartDate", "EndDate", "On", "Off", "ExpectedOpenings")
 )
 for (tabName in tabList) {
@@ -223,7 +221,8 @@ for (tabName in tabList) {
   # StartDate > EndDate
   b <- FALSE
   if ("StartDate" %in% V & "EndDate" %in% V) {
-    b <- tmpTab$EndDate < tmpTab$StartDate
+    b <- !is.na(tmpTab$StartDate) & !is.na(tmpTab$EndDate) &
+      tmpTab$EndDate < tmpTab$StartDate
     if (any(b)) {
       for(i in 1:sum(b)) {
         cat(file = errLog, append = TRUE, paste(
@@ -744,23 +743,58 @@ if (any(ls() == "EMCovariables")) {
 
   mcov <- EMCovariables
 
-  # Duplicates
-  b <- duplicated(mcov[c("PatientCode", "Monitor")])
+  # Keep only patients/monitors who are in the MEMS dataframe
+  mcov <- merge(unique(mems[idvar]), mcov, by = idvar)
+
+  # Fill empty dates
+  b <- is.na(mcov$StartDate)
+  for (i in which(b)) {
+    d <- min(mems[mems$PatientCode == mcov[i, "PatientCode"] &
+                    mems$Monitor == mcov[i, "Monitor"], "Date"])
+    if (!is.na(mcov[i, "EndDate"])) {
+      d <- min(d, mcov[i, "EndDate"])
+    }
+    mcov[i, "StartDate"] <- d
+  }
+  b <- is.na(mcov$EndDate)
+  for (i in which(b)) {
+    d <- max(mems[mems$PatientCode == mcov[i, "PatientCode"] &
+                    mems$Monitor == mcov[i, "Monitor"], "Date"])
+    if (!is.na(mcov[i, "StartDate"])) {
+      d <- max(d, mcov[i, "StartDate"])
+    }
+    mcov[i, "EndDate"] <- d
+  }
+  suppressWarnings(rm(b, d, i))
+
+  # Convert periods to long format
+  v <- names(mcov)[!(names(mcov) %in% c("StartDate", "EndDate"))]
+  mcovL <- do.call(rbind, lapply(1:nrow(mcov), function(i) {
+    d <- seq(mcov[i, "StartDate"], mcov[i, "EndDate"], 1)
+    cbind(mcov[i, v, drop = FALSE], Date = d, row.names = NULL)
+  }))
+  rm(mcov, v)
+
+  # Check that there are no overlaps
+  ol <- aggregate(.count ~ PatientCode + Monitor + Date,
+                  cbind(mcovL, .count = 1), sum)
+  b <- ol$.count > 1
   if (any(b)) {
-    dup <- unique(mcov[b, c("PatientCode", "Monitor")])
-    for(i in 1:nrow(dup)) {
-      cat(file = errLog, append = TRUE, paste0(
-        "PatientCode ", dup[i, "PatientCode"], ", Monitor ", dup[i, "Monitor"],
-        ": Duplicated rows in EMCovariables\n"
+    for(i in 1:sum(b)) {
+      cat(file = errLog, append = TRUE, paste(
+        "EMCovariables: Overlaps for PatientCode", ol[b, "PatientCode"][i],
+        "Monitor", ol[b, "Monitor"][i], "Date", ol[b, "Date"][i], "\n"
       ))
     }
-    mcov <- mcov[!b, ]
+    mcovL <- merge(mcovL, ol, by = c(idvar, "Date"))
+    mcovL <- mcovL[mcovL$.count == 1, ]
+    mcovL$.count <- NULL
   }
-  suppressWarnings(rm(b, dup, i))
+  suppressWarnings(rm(b, i, ol))
 
-  # Add covariables
-  mems <- merge(mems, mcov, by = c("PatientCode", "Monitor"), all.x = TRUE)
-  rm(mcov)
+  # Add EM covariables to the MEMS dataset
+  mems <- merge(mems, mcovL, by = c(idvar, "Date"), all.x = TRUE)
+  rm(mcovL)
 
 }
 
@@ -774,22 +808,55 @@ if (any(ls() == "PatientCovariables")) {
 
   pcov <- PatientCovariables
 
-  # Duplicates
-  b <- duplicated(pcov$PatientCode)
+  # Keep only patients who are in the MEMS dataframe
+  pcov <- pcov[pcov$PatientCode %in% unique(pmems$PatientCode), ]
+
+  # Fill empty dates
+  b <- is.na(pcov$StartDate)
+  for (i in which(b)) {
+    d <- min(pmems[pmems$PatientCode == pcov[i, "PatientCode"], "Date"])
+    if (!is.na(pcov[i, "EndDate"])) {
+      d <- min(d, pcov[i, "EndDate"])
+    }
+    pcov[i, "StartDate"] <- d
+  }
+  b <- is.na(pcov$EndDate)
+  for (i in which(b)) {
+    d <- max(pmems[pmems$PatientCode == pcov[i, "PatientCode"], "Date"])
+    if (!is.na(pcov[i, "StartDate"])) {
+      d <- max(d, pcov[i, "StartDate"])
+    }
+    pcov[i, "EndDate"] <- d
+  }
+  suppressWarnings(rm(b, d, i))
+
+  # Convert periods to long format
+  v <- names(pcov)[!(names(pcov) %in% c("StartDate", "EndDate"))]
+  pcovL <- do.call(rbind, lapply(1:nrow(pcov), function(i) {
+    d <- seq(pcov[i, "StartDate"], pcov[i, "EndDate"], 1)
+    cbind(pcov[i, v, drop = FALSE], Date = d, row.names = NULL)
+  }))
+  rm(pcov, v)
+
+  # Check that there are no overlaps
+  ol <- aggregate(.count ~ PatientCode + Date, cbind(pcovL, .count = 1), sum)
+  b <- ol$.count > 1
   if (any(b)) {
-    dup <- unique(pcov[b, "PatientCode"])
-    for(i in 1:length(dup)) {
-      cat(file = errLog, append = TRUE, paste0(
-        "PatientCode ", dup[i], ": Duplicated rows in PatientCovariables\n"
+    for(i in 1:sum(b)) {
+      cat(file = errLog, append = TRUE, paste(
+        "PatientCovariables: Overlaps for PatientCode",
+        ol[b, "PatientCode"][i], "Date", ol[b, "Date"][i], "\n"
       ))
     }
-    pcov <- pcov[!b, ]
+    pcovL <- merge(pcovL, ol, by = c("PatientCode", "Date"))
+    pcovL <- pcovL[pcovL$.count == 1, ]
+    pcovL$.count <- NULL
   }
-  suppressWarnings(rm(b, dup, i))
+  suppressWarnings(rm(b, i, ol))
 
   # Add covariables
-  pmems <- merge(pmems, pcov, by = c("PatientCode"), all.x = TRUE)
-  rm(pcov)
+  pmems <- merge(pmems, pcovL, by = c("PatientCode", "Date"), all.x = TRUE)
+  rm(pcovL)
 
 }
 
