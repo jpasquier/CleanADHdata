@@ -6,9 +6,6 @@
 #
 
 # TODO:
-# * Swap order "ObservedOpenings" / "AddedOpenings"
-#   The correct order is: Recorded-, Added-, Corrected-, ExpectedOpenings
-# * Rename ObservedOpenings to CorrectedOpenings
 # * Add a warning if the same patient/monitor/date combination is found in
 #   several event files
 # * Check that patient covariables are added to the output files
@@ -484,8 +481,8 @@ mems <- merge(obsL, mems, by = c(idvar, "Date"), all.x = TRUE)
 mems$RecordedOpenings[is.na(mems$RecordedOpenings)] <- 0
 rm(obs, obsL)
 
-# Define the number of observed openings as the number of recorded openings
-mems$ObservedOpenings <- mems$RecordedOpenings
+# Define the number of corrected openings as the number of recorded openings
+mems$CorrectedOpenings <- mems$RecordedOpenings
 
 # ----------------------------- Added openings ------------------------------ #
 
@@ -505,8 +502,17 @@ if (any(ls() == "AddedOpenings")) {
     # Add "AddedOpenings" to MEMS table
     mems <- merge(mems, ao, by = c(idvar, "Date"), all.x = TRUE)
     mems$AddedOpenings[is.na(mems$AddedOpenings)] <- 0
-    mems$ObservedOpenings <- mems$ObservedOpenings + mems$AddedOpenings
+    mems$CorrectedOpenings <- mems$CorrectedOpenings + mems$AddedOpenings
     rm(ao)
+
+    # Invert columns AddedOpenings and CorrectedOpenings
+    J <- 1:ncol(mems)
+    j1 <- which(names(mems) == "AddedOpenings")
+    j2 <- which(names(mems) == "CorrectedOpenings")
+    J[j1] <- j2
+    J[j2] <- j1
+    mems <- mems[J]
+    rm(J, j1, j2)
 
   }
 
@@ -557,8 +563,8 @@ if (any(ls() == "NonMonitoredPeriods")) {
     mems$NonMonitored[is.na(mems$NonMonitored)] <- FALSE
     rm(nmpL)
 
-    # Set ObservedOpenings = NA for non-monitored periods
-    mems$ObservedOpenings[mems$NonMonitored] <- NA
+    # Set CorrectedOpenings = NA for non-monitored periods
+    mems$CorrectedOpenings[mems$NonMonitored] <- NA
 
   }
 
@@ -687,7 +693,7 @@ suppressWarnings(rm(b, b2, i))
 # ----------------------- Implementation calculation ------------------------ #
 
 # By monitor
-mems$Implementation <- mems$ObservedOpenings >= mems$ExpectedOpenings
+mems$Implementation <- mems$CorrectedOpenings >= mems$ExpectedOpenings
 mems$Implementation <- as.numeric(mems$Implementation)
 
 # By patient
