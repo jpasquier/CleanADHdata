@@ -5,6 +5,22 @@
 #                        |_|  |_||_____||_|  |_||____/
 #
 
+# TODO:
+# * Swap order "ObservedOpenings" / "AddedOpenings"
+#   The correct order is: Recorded-, Added-, Corrected-, ExpectedOpenings
+# * Rename ObservedOpenings to CorrectedOpenings
+# * Add a warning if the same patient/monitor/date combination is found in
+#   several event files
+# * Check that patient covariables are added to the output files
+# * Verify that openings between midnight and 3am are attributed to the
+#   previous day
+# * Add a warning if no event is found for a patient/monitor who is listed in
+#   the auxiliary data file
+
+# POSSIBLE OPTIONS:
+# * Also read CSV files for raw data (in addition to Excel files))
+# * Case-insensitive variable names
+
 # -------------------------------- Libraries -------------------------------- #
 
 # Install missing packages and load required libraries
@@ -74,8 +90,7 @@ str2dateHour <- function(x) {
 
 # ----------------------- Import auxiliary data file ------------------------ #
 
-# Select the auxiliary data file. The `eventslist` files must be in the same
-# directory
+# Select the auxiliary data file
 auxiliaryDataFile <- ""
 cap <- "Select the auxiliary data file"
 if (!file.exists(auxiliaryDataFile)) {
@@ -243,6 +258,18 @@ suppressWarnings(rm(
 
 # --------------------- Event lists and daily adherence --------------------- #
 
+# Select the data directory. T
+dataDirectory <- ""
+cap <- "Select the data directory"
+if (!dir.exists(dataDirectory)) {
+  if (Sys.info()["sysname"] == "Windows") {
+    dataDirectory <- choose.dir(caption = cap, multi = FALSE)
+  } else {
+    dataDirectory <- tk_choose.dir(caption = cap)
+    dataDirectory <- paste(dataDirectory, collapse = " ")
+  }
+}
+rm(cap)
 # Select all the files in working directory whose name contains the character
 # string `Event(s)list` or `Daily adherence` (type case does not have to match)
 fileList <- list.files(workingDirectory)
@@ -657,7 +684,7 @@ if (all(b)) {
 }
 suppressWarnings(rm(b, b2, i))
 
-# ----------------------------- Implementation ------------------------------ #
+# ----------------------- Implementation calculation ------------------------ #
 
 # By monitor
 mems$Implementation <- mems$ObservedOpenings >= mems$ExpectedOpenings
