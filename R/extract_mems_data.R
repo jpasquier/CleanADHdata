@@ -509,8 +509,10 @@ if (any(ls() == "AddedOpenings")) {
     J <- 1:ncol(mems)
     j1 <- which(names(mems) == "AddedOpenings")
     j2 <- which(names(mems) == "CorrectedOpenings")
-    J[j1] <- j2
-    J[j2] <- j1
+    if (j1 > j2) {
+      J[j1] <- j2
+      J[j2] <- j1
+    }
     mems <- mems[J]
     rm(J, j1, j2)
 
@@ -562,9 +564,6 @@ if (any(ls() == "NonMonitoredPeriods")) {
     mems <- merge(mems, nmpL, by = c(idvar, "Date"), all.x = TRUE)
     mems$NonMonitored[is.na(mems$NonMonitored)] <- FALSE
     rm(nmpL)
-
-    # Set CorrectedOpenings = NA for non-monitored periods
-    mems$CorrectedOpenings[mems$NonMonitored] <- NA
 
   }
 
@@ -654,6 +653,19 @@ if (nrow(Regimen) >= 1) {
 
 }
 
+# Invert columns NonMonitored and ExpectedOpenings
+if ("NonMonitored" %in% names(mems)) {
+  J <- 1:ncol(mems)
+  j1 <- which(names(mems) == "ExpectedOpenings")
+  j2 <- which(names(mems) == "NonMonitored")
+  if (j1 > j2) {
+    J[j1] <- j2
+    J[j2] <- j1
+  }
+  mems <- mems[J]
+  rm(J, j1, j2)
+}
+
 # Check that ExpectedOpenings is defined for each Patient/Monitor/Date in
 # monitored periods
 b <- is.na(mems$ExpectedOpenings)
@@ -695,6 +707,11 @@ suppressWarnings(rm(b, b2, i))
 # By monitor
 mems$Implementation <- mems$CorrectedOpenings >= mems$ExpectedOpenings
 mems$Implementation <- as.numeric(mems$Implementation)
+
+# Set Implementation = NA for non-monitored periods (if any)
+if ("NonMonitored" %in% names(mems)) {
+  mems$Implementation[mems$NonMonitored] <- NA
+}
 
 # By patient
 imp <- aggregate(Implementation ~ PatientCode + Date, mems, prod,
