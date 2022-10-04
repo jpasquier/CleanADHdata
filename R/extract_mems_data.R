@@ -11,8 +11,6 @@
 # * Check that patient covariables are added to the output files
 # * Verify that openings between midnight and 3am are attributed to the
 #   previous day
-# * Add a warning if no event is found for a patient/monitor who is listed in
-#   the auxiliary data file
 
 # POSSIBLE OPTIONS:
 # * Also read CSV files for raw data (in addition to Excel files))
@@ -435,6 +433,21 @@ if (any(b)) {
   mems <- aggregate(RecordedOpenings ~ PatientCode + Monitor + Date, mems, sum)
 }
 suppressWarnings(rm(b, dup, i))
+
+# Add a warning if no data is found for a patient/monitor
+da <- merge(EMInfo[c(idvar)], cbind(unique(mems[idvar]), DataAvailable = 1),
+            by = idvar, all.x = TRUE)
+da$DataAvailable[is.na(da$DataAvailable)] <- 0
+if (any(da$DataAvailable == 0)) {
+  da <- da[da$DataAvailable == 0, ]
+  for(i in 1:nrow(da)) {
+    cat(file = wrnLog, append = TRUE, paste0(
+      "PatientCode ", da[i, "PatientCode"], ", Monitor ", da[i, "Monitor"],
+      ": Present in the auxiliary data file, but no event found\n"
+    ))
+  }
+}
+suppressWarnings(rm(da, i))
 
 # ----------------------- Observation period (EMInfo) ----------------------- #
 
