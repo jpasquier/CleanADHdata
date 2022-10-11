@@ -6,11 +6,6 @@
 #
 
 # TODO:
-# * Add a warning if the same patient/monitor/date combination is found in
-#   several event files
-# * Check that patient covariables are added to the output files
-# * Verify that openings between midnight and 3am are attributed to the
-#   previous day
 
 # POSSIBLE OPTIONS:
 # * Also read CSV files for raw data (in addition to Excel files))
@@ -258,7 +253,7 @@ dataDirectory <- ""
 cap <- "Select the data directory"
 if (!dir.exists(dataDirectory)) {
   if (Sys.info()["sysname"] == "Windows") {
-    dataDirectory <- choose.dir(caption = cap, multi = FALSE)
+    dataDirectory <- choose.dir(caption = cap)
   } else {
     dataDirectory <- tk_choose.dir(caption = cap)
     dataDirectory <- paste(dataDirectory, collapse = " ")
@@ -375,8 +370,40 @@ OpeningTables <- lapply(c(events = 1, dailyAdh = 2), function(k) {
         }
       }
     }
+    # Add the file name to check if the same patient/monitor/date combination
+    # is found in several event files
+    r$FileName <- f
     return(r)
   }))
+})
+
+# Check if the same patient/monitor/date combination is found in several event
+# files
+dup1 <- unique(do.call(rbind, lapply(OpeningTables, function(tab) {
+  tab[c("PatientCode", "Monitor", "Date", "FileName")]
+})))
+dup2 <- aggregate(FileName ~ PatientCode + Monitor + Date, dup1,
+                  function(x) length(unique(x)))
+dup2 <- dup2[dup2$FileName > 1, ]
+if (nrow(dup2) > 0) {
+  dup2$FileName <- NULL
+  dup1 <- merge(dup1, dup2, by = c("PatientCode", "Monitor", "Date"))
+  dup2 <- aggregate(FileName ~ PatientCode + Monitor + Date, dup1,
+                    function(x) paste(x, collapse = ", "))
+  for(i in 1:nrow(dup2)) {
+    cat(file = wrnLog, append = TRUE, paste0(
+      "PatientCode ", dup2[i, "PatientCode"], ", Monitor ", dup2[i, "Monitor"],
+      ", Date ", dup2[i, "Monitor"], ": Events found in multiple files: ",
+      dup2[i, "FileName"], "\n"
+    ))
+  }
+}
+suppressWarnings(rm(dup1, dup2, i))
+
+# Remove FileName variable
+OpeningTables <- lapply(OpeningTables, function(tab) {
+ tab$FileName <- NULL
+ return(tab)
 })
 
 # ---------- Eventlist: Number of openings by patient/monitor/date ---------- #
