@@ -262,16 +262,20 @@ if (!dir.exists(dataDirectory)) {
 rm(cap)
 # Select all the files in working directory whose name contains the character
 # string `Event(s)list` or `Daily adherence` (type case does not have to match)
-fileList <- list.files(workingDirectory)
+fileList <- list.files(dataDirectory)
 fileList <- lapply(c("events?list", "dailyadherence"), function(p) {
   fileList[grepl(p, tolower(fileList))]
 })
+
+if (all(sapply(fileList, length) == 0)) {
+  stop('The data directory do not contains any data')
+}
 
 # Imports eventlists and daily adherence files. The files are read and the
 # tables they contain are concatenated.
 OpeningTables <- lapply(c(events = 1, dailyAdh = 2), function(k) {
   do.call(rbind, lapply(fileList[[k]], function(f) {
-    r <- as.data.frame(read_excel(file.path(workingDirectory, f),
+    r <- as.data.frame(read_excel(file.path(dataDirectory, f),
                                   na = c("", "NA")))
     # Check that the files is not empty
     if (nrow(r) == 0) {
@@ -478,19 +482,8 @@ suppressWarnings(rm(da, i))
 
 # ----------------------- Observation period (EMInfo) ----------------------- #
 
-# Check that we have exactly one period per patient/monitor
-obs <- merge(unique(mems[idvar]), EMInfo[c(idvar, c("StartDate", "EndDate"))],
-             by = idvar, all.x = TRUE)
-b <- is.na(obs$StartDate)
-if (any(b)) {
-  for(i in 1:sum(b)) {
-    cat(file = errLog, append = TRUE, paste(
-      "EMInfo: No observation period for PatientCode",
-      obs[b, "PatientCode"][i], "Monitor", obs[b, "Monitor"][i], "\n"
-    ))
-  }
-  obs <- obs[!b, ]
-}
+# Check that we have at most one one observation period per patient/monitor
+obs <- EMInfo[c(idvar, c("StartDate", "EndDate"))]
 dup <- unique(obs[duplicated(obs[idvar]), idvar])
 if (nrow(dup) > 0) {
   for (i in 1:nrow(dup)) {
@@ -500,7 +493,7 @@ if (nrow(dup) > 0) {
     ))
   }
 }
-suppressWarnings(rm(b, dup, i))
+suppressWarnings(rm(dup, i))
 
 # Convert periods to long format
 obsL <- do.call(rbind, lapply(1:nrow(obs), function(i) {
@@ -770,7 +763,7 @@ pmems <- pmems[order(pmems$PatientCode, pmems$Date), ]
 
 # Check that dates are consecutive for each PatientCode/Monitor
 b <- aggregate(Date ~ PatientCode + Monitor, mems, function(x) {
-  length(x) > 1 & all(x[-1] - x[-length(x)] != 1)
+  length(x) > 1 & any(x[-1] - x[-length(x)] != 1)
 })
 if (any(b[[3]])) {
   for(i in 1:sum(b[[3]])) {
@@ -781,7 +774,7 @@ if (any(b[[3]])) {
   }
 }
 b <- aggregate(Date ~ PatientCode, pmems, function(x) {
-  length(x) > 1 & all(x[-1] - x[-length(x)] != 1)
+  length(x) > 1 & any(x[-1] - x[-length(x)] != 1)
 })
 if (any(b[[2]])) {
   for(i in 1:sum(b[[2]])) {
