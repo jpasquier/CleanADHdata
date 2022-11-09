@@ -1,9 +1,7 @@
-#                         __  __  _____  __  __  ____
-#                        |  \/  || ____||  \/  |/ ___|
-#                        | |\/| ||  _|  | |\/| |\___ \
-#                        | |  | || |___ | |  | | ___) |
-#                        |_|  |_||_____||_|  |_||____/
-#
+#       _____ __                  ___    ___   __ __    __       __
+#      / ___// /___  ___ _ ___   / _ |  / _ \ / // /___/ /___ _ / /_ ___ _
+#     / /__ / // -_)/ _ `// _ \ / __ | / // // _  // _  // _ `// __// _ `/
+#     \___//_/ \__/ \_,_//_//_//_/ |_|/____//_//_/ \_,_/ \_,_/ \__/ \_,_/
 
 # TODO:
 
@@ -397,7 +395,7 @@ if (nrow(dup2) > 0) {
   for(i in 1:nrow(dup2)) {
     cat(file = wrnLog, append = TRUE, paste0(
       "PatientCode ", dup2[i, "PatientCode"], ", Monitor ", dup2[i, "Monitor"],
-      ", Date ", dup2[i, "Monitor"], ": Events found in multiple files: ",
+      ", Date ", dup2[i, "Date"], ": Events found in multiple files: ",
       dup2[i, "FileName"], "\n"
     ))
   }
