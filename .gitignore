@@ -4,6 +4,7 @@
 /R/.spell/
 /R/.lvimrc
 !/data-simulated/
+!/misc/
 !README.md
 !.gitignore
 
