@@ -3,11 +3,6 @@
 #     / /__ / // -_)/ _ `// _ \ / __ | / // // _  // _  // _ `// __// _ `/
 #     \___//_/ \__/ \_,_//_//_//_/ |_|/____//_//_/ \_,_/ \_,_/ \__/ \_,_/
 
-# TODO:
-
-# POSSIBLE OPTIONS:
-# * Also read CSV files for raw data (in addition to Excel files))
-# * Case-insensitive variable names
 
 # -------------------------------- Libraries -------------------------------- #
 
@@ -49,7 +44,7 @@ bool2index <- function(b) {
   return(r)
 }
 
-# Extract dates and times from a string  
+# Extract dates and times from a string
 str2dateHour <- function(x) {
   if (!any(class(x) == "character")) {
     stop("A string must be provided as input")
@@ -273,8 +268,21 @@ if (all(sapply(fileList, length) == 0)) {
 # tables they contain are concatenated.
 OpeningTables <- lapply(c(events = 1, dailyAdh = 2), function(k) {
   do.call(rbind, lapply(fileList[[k]], function(f) {
-    r <- as.data.frame(read_excel(file.path(dataDirectory, f),
-                                  na = c("", "NA")))
+    f0 <- file.path(dataDirectory, f)
+    if (grepl("\\.xlsx?", f)) {
+      r <- as.data.frame(read_excel(f0, na = c("", "NA")))
+    } else if (grepl("\\.csv", f)) {
+      r <- if (grepl(";", readLines(f0, n = 1))) {
+        read.csv2(f0)
+      } else {
+        read.csv(f0)
+      }
+    } else {
+      cat(file = errLog, append = TRUE, paste0(
+        "File", f, " is not readable\n"
+      ))
+      return(NULL)
+    }
     # Check that the files is not empty
     if (nrow(r) == 0) {
       cat(file = wrnLog, append = TRUE, paste("File", f, "is empty\n"))
