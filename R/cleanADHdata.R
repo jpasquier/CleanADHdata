@@ -273,9 +273,11 @@ OpeningTables <- lapply(c(events = 1, dailyAdh = 2), function(k) {
       r <- as.data.frame(read_excel(f0, na = c("", "NA")))
     } else if (grepl("\\.csv", f)) {
       r <- if (grepl(";", readLines(f0, n = 1))) {
-        read.csv2(f0)
+        #read.csv2(f0)
+        read.table(text = readLines(f0, warn = FALSE), header = TRUE, sep = ";")
       } else {
-        read.csv(f0)
+        #read.csv(f0)
+        read.table(text = readLines(f0, warn = FALSE), header = TRUE, sep = ",")
       }
     } else {
       cat(file = errLog, append = TRUE, paste0(
