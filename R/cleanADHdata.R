@@ -328,8 +328,12 @@ OpeningTables <- lapply(c(events = 1, dailyAdh = 2), function(k) {
     # Check that the variable `Date` is a date or a datetime
     if (any(!is.na(r$Date))) {
       error <- FALSE
-      if (any(class(r$Date) %in% c("Date", "POSIXct"))) {
+      if (any(class(r$Date) == "Date")) {
         r$Date <- as.character(r$Date)
+      } else if (any(class(r$Date) == "POSIXct")) {
+        tmp <- as.character(r$Date)
+        r$Date <- ifelse(format(r$Date, "%H%M%S") == "000000",
+                         paste(tmp, "00:00:00"), tmp)
       }
       z <- tryCatch(str2dateHour(r$Date), error = function(e) e)
       if (any(grepl("error", class(z)))) {
