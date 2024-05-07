@@ -23,6 +23,16 @@ if (Sys.info()["sysname"] != "Windows") {
 }
 rm(pkgs, npkgs, pkg)
 
+# -------- Cleans up variables created by a previous script execution ------- #
+
+suppressWarnings(rm(
+  "AddedOpenings", "AdverseEvents", "bool2index", "dataDirectory",
+  "EMCovariables", "EMInfo", "errLog", "fileList", "idvar", "logDir", "mems",
+  "NonMonitoredPeriods", "now", "OpeningTables", "outputFile",
+  "PatientCovariables", "pmems", "Regimen", "smy.mems", "smy.pmems",
+  "str2dateHour", "tabList", "workingDirectory", "wrnLog"
+))
+
 # ---------------------------- Help function(s) ----------------------------- #
 
 # bool2index: create a string from a boolean vector which indicates where are
@@ -235,9 +245,8 @@ for (tabName in tabList) {
   }
   if (replaceTab) assign(tabName, tmpTab)
 }
-suppressWarnings(rm(
-  b, i, linesBadDate, r, replaceTab, requestedVariables, tabName, tmpTab, V, v
-))
+suppressWarnings(rm(b, i, linesBadDate, r, replaceTab, requestedVariables,
+                    tabName, tmpTab, V, V2, v))
 
 # --------------------- Event lists and daily adherence --------------------- #
 
